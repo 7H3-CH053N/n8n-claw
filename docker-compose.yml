@@ -1,20 +1,18 @@
 version: '3.8'
-
 services:
-  # ── n8n ─────────────────────────────────────────────────────
   n8n:
-    image: n8nio/n8n:latest
+    image: 'n8nio/n8n:latest'
     container_name: n8n-claw
     restart: unless-stopped
     expose:
-      - "5678"
+      - '5678'
     environment:
-      - N8N_HOST=${N8N_HOST}
+      - 'N8N_HOST=${N8N_HOST}'
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=https://${N8N_HOST}/
+      - 'WEBHOOK_URL=https://${N8N_HOST}/'
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - 'N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}'
       - GENERIC_TIMEZONE=Europe/Vienna
       - N8N_LOG_LEVEL=info
       - N8N_SECURE_COOKIE=false
@@ -23,9 +21,9 @@ services:
       - DB_POSTGRESDB_PORT=5432
       - DB_POSTGRESDB_DATABASE=postgres
       - DB_POSTGRESDB_USER=postgres
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - 'DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}'
     volumes:
-      - n8n_data:/home/node/.n8n
+      - 'n8n_data:/home/node/.n8n'
     depends_on:
       db:
         condition: service_healthy
@@ -33,100 +31,57 @@ services:
       - n8n-claw-net
       - coolify
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.n8n-claw.rule=Host(`${N8N_HOST}`)"
-      - "traefik.http.routers.n8n-claw.entrypoints=https"
-      - "traefik.http.routers.n8n-claw.tls=true"
-      - "traefik.http.routers.n8n-claw.tls.certresolver=letsencrypt"
-      - "traefik.http.services.n8n-claw.loadbalancer.server.port=5678"
-      - "traefik.docker.network=coolify"
+      - traefik.enable=true
+      - 'traefik.http.routers.n8n-claw.rule=Host(`${N8N_HOST}`)'
+      - traefik.http.routers.n8n-claw.entrypoints=https
+      - traefik.http.routers.n8n-claw.tls=true
+      - traefik.http.routers.n8n-claw.tls.certresolver=letsencrypt
+      - traefik.http.services.n8n-claw.loadbalancer.server.port=5678
+      - traefik.docker.network=coolify
 
-  # ── PostgreSQL ───────────────────────────────────────────────
   db:
-    image: supabase/postgres:15.8.1.085
+    image: 'supabase/postgres:15.8.1.085'
     container_name: n8n-claw-db
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5432:5432"
+      - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
     volumes:
-      - db_data:/var/lib/postgresql/data
-      - ./supabase/migrations:/docker-entrypoint-initdb.d
+      - 'db_data:/var/lib/postgresql/data'
     networks:
       - n8n-claw-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U postgres'
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 30s
 
-  # ── PostgREST ────────────────────────────────────────────────
   rest:
-    image: postgrest/postgrest:v14.5
+    image: 'postgrest/postgrest:v14.5'
     container_name: n8n-claw-rest
     restart: unless-stopped
     expose:
-      - "3000"
+      - '3000'
     environment:
-      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_URI: 'postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres'
       PGRST_DB_SCHEMA: public
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET}
-      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_JWT_SECRET: '${SUPABASE_JWT_SECRET}'
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
     depends_on:
       db:
         condition: service_healthy
     networks:
       - n8n-claw-net
 
-  # ── Kong ─────────────────────────────────────────────────────
-  kong:
-    image: kong:2.8.1
-    container_name: n8n-claw-kong
-    restart: unless-stopped
-    expose:
-      - "8000"
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
-      KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl
-    volumes:
-      - ./supabase/kong.deployed.yml:/var/lib/kong/kong.yml:ro
-    depends_on:
-      - rest
-    networks:
-      - n8n-claw-net
-
-  # ── Supabase Studio ──────────────────────────────────────────
-  studio:
-    image: supabase/studio:20250113-83c9420
-    container_name: n8n-claw-studio
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3001:3000"
-    environment:
-      STUDIO_PG_META_URL: http://meta:8080
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DEFAULT_ORGANIZATION_NAME: n8n-claw
-      DEFAULT_PROJECT_NAME: n8n-claw
-      SUPABASE_URL: http://kong:8000
-      SUPABASE_PUBLIC_URL: http://kong:8000
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-      AUTH_JWT_SECRET: ${SUPABASE_JWT_SECRET}
-    depends_on:
-      - meta
-    networks:
-      - n8n-claw-net
-
-  # ── Postgres Meta ────────────────────────────────────────────
   meta:
-    image: supabase/postgres-meta:v0.95.2
+    image: 'supabase/postgres-meta:v0.95.2'
     container_name: n8n-claw-meta
     restart: unless-stopped
     environment:
@@ -134,7 +89,7 @@ services:
       PG_META_DB_HOST: db
       PG_META_DB_PORT: 5432
       PG_META_DB_USER: postgres
-      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_DB_PASSWORD: '${POSTGRES_PASSWORD}'
       PG_META_DB_NAME: postgres
     depends_on:
       db:
@@ -142,56 +97,52 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── Email Bridge ─────────────────────────────────────────────
   email-bridge:
     build: ./email-bridge
     container_name: n8n-claw-email-bridge
     restart: unless-stopped
     expose:
-      - "3100"
+      - '3100'
     networks:
       - n8n-claw-net
 
-  # ── File Bridge ──────────────────────────────────────────────
   file-bridge:
     build: ./file-bridge
     container_name: n8n-claw-file-bridge
     restart: unless-stopped
     expose:
-      - "3200"
+      - '3200'
     volumes:
-      - file_bridge_data:/data
+      - 'file_bridge_data:/data'
     environment:
       - UPLOAD_TTL_HOURS=24
       - MAX_FILE_SIZE_MB=20
     networks:
       - n8n-claw-net
 
-  # ── Crawl4AI ─────────────────────────────────────────────────
   crawl4ai:
-    image: unclecode/crawl4ai:latest
+    image: 'unclecode/crawl4ai:latest'
     container_name: n8n-claw-crawl4ai
     restart: unless-stopped
-    shm_size: "1g"
+    shm_size: 1g
     networks:
       - n8n-claw-net
 
-  # ── SearXNG ──────────────────────────────────────────────────
   searxng:
-    image: searxng/searxng:latest
+    image: 'searxng/searxng:latest'
     container_name: n8n-claw-searxng
     restart: unless-stopped
     expose:
-      - "8080"
+      - '8080'
     volumes:
-      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - './searxng/settings.yml:/etc/searxng/settings.yml:ro'
     networks:
       - n8n-claw-net
 
 volumes:
-  n8n_data:
-  db_data:
-  file_bridge_data:
+  n8n_data: null
+  db_data: null
+  file_bridge_data: null
 
 networks:
   n8n-claw-net:
