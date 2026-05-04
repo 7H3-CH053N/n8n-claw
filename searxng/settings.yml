@@ -1,26 +1,17 @@
 use_default_settings: true
 
 server:
-  bind_address: "0.0.0.0"
+  secret_key: "ad29332069110cfe642d3d17813d94c2"
+  limiter: false
+  image_proxy: false
   port: 8080
-  secret_key: "{{SEARXNG_SECRET_KEY}}"
+  bind_address: "0.0.0.0"
 
 search:
-  formats:
-    - html
-    - json
+  safe_search: 0
+  autocomplete: ""
   default_lang: "de"
 
-engines:
-  - name: google
-    engine: google
-    disabled: false
-  - name: duckduckgo
-    engine: duckduckgo
-    disabled: false
-  - name: brave
-    engine: brave
-    disabled: false
-  - name: wikipedia
-    engine: wikipedia
-    disabled: false
+ui:
+  default_locale: "de"
+  default_theme: simple
