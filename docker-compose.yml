@@ -6,20 +6,18 @@ services:
     image: n8nio/n8n:latest
     container_name: n8n-claw
     restart: unless-stopped
-    ports:
-      - "5678:5678"
+    expose:
+      - "5678"
     environment:
-      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_HOST=${N8N_HOST}
       - N8N_PORT=5678
-      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678}
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://${N8N_HOST}/
       - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Berlin}
+      - GENERIC_TIMEZONE=Europe/Vienna
       - N8N_LOG_LEVEL=info
       - N8N_SECURE_COOKIE=false
-      # API keys (Anthropic, Embeddings) are stored in DB (tools_config table)
-      # and read by workflows at runtime via PostgREST — not as env vars
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=db
       - DB_POSTGRESDB_PORT=5432
@@ -33,8 +31,17 @@ services:
         condition: service_healthy
     networks:
       - n8n-claw-net
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n-claw.rule=Host(`${N8N_HOST}`)"
+      - "traefik.http.routers.n8n-claw.entrypoints=https"
+      - "traefik.http.routers.n8n-claw.tls=true"
+      - "traefik.http.routers.n8n-claw.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n-claw.loadbalancer.server.port=5678"
+      - "traefik.docker.network=coolify"
 
-  # ── PostgreSQL (for Supabase) ───────────────────────────────
+  # ── PostgreSQL ───────────────────────────────────────────────
   db:
     image: supabase/postgres:15.8.1.085
     container_name: n8n-claw-db
@@ -57,13 +64,13 @@ services:
       retries: 20
       start_period: 30s
 
-  # ── Supabase REST API (PostgREST) ───────────────────────────
+  # ── PostgREST ────────────────────────────────────────────────
   rest:
     image: postgrest/postgrest:v14.5
     container_name: n8n-claw-rest
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
+    expose:
+      - "3000"
     environment:
       PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       PGRST_DB_SCHEMA: public
@@ -76,7 +83,7 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── Kong (API Gateway — routes /rest/v1 to PostgREST) ──────
+  # ── Kong ─────────────────────────────────────────────────────
   kong:
     image: kong:2.8.1
     container_name: n8n-claw-kong
@@ -95,7 +102,7 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── Supabase Studio (Web UI) ────────────────────────────────
+  # ── Supabase Studio ──────────────────────────────────────────
   studio:
     image: supabase/studio:20250113-83c9420
     container_name: n8n-claw-studio
@@ -117,7 +124,7 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── Postgres Meta (for Studio) ───────────────────────────────
+  # ── Postgres Meta ────────────────────────────────────────────
   meta:
     image: supabase/postgres-meta:v0.95.2
     container_name: n8n-claw-meta
@@ -135,8 +142,7 @@ services:
     networks:
       - n8n-claw-net
 
-
-  # ── Email Bridge (IMAP/SMTP REST API) ──────────────────────
+  # ── Email Bridge ─────────────────────────────────────────────
   email-bridge:
     build: ./email-bridge
     container_name: n8n-claw-email-bridge
@@ -146,7 +152,7 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── File Bridge (temporary file storage for agent binary passthrough) ──
+  # ── File Bridge ──────────────────────────────────────────────
   file-bridge:
     build: ./file-bridge
     container_name: n8n-claw-file-bridge
@@ -161,26 +167,22 @@ services:
     networks:
       - n8n-claw-net
 
-  # ── Crawl4AI (Web Reader — clean markdown from URLs) ────────
+  # ── Crawl4AI ─────────────────────────────────────────────────
   crawl4ai:
     image: unclecode/crawl4ai:latest
     container_name: n8n-claw-crawl4ai
     restart: unless-stopped
-    shm_size: "2g"
-    deploy:
-      resources:
-        limits:
-          memory: 4G
+    shm_size: "1g"
     networks:
       - n8n-claw-net
 
-  # ── SearXNG (Web Search) ────────────────────────────────────
+  # ── SearXNG ──────────────────────────────────────────────────
   searxng:
     image: searxng/searxng:latest
     container_name: n8n-claw-searxng
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8888:8080"
+    expose:
+      - "8080"
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     networks:
@@ -194,3 +196,5 @@ volumes:
 networks:
   n8n-claw-net:
     driver: bridge
+  coolify:
+    external: true
