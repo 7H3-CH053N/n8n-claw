@@ -128,17 +128,6 @@ services:
     networks:
       - n8n-claw-net
 
-  searxng:
-    image: 'searxng/searxng:latest'
-    container_name: n8n-claw-searxng
-    restart: unless-stopped
-    expose:
-      - '8080'
-    volumes:
-      - './searxng/settings.yml:/etc/searxng/settings.yml:ro'
-    networks:
-      - n8n-claw-net
-
 volumes:
   n8n_data: null
   db_data: null
